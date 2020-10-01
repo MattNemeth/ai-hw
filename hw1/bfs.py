@@ -1,93 +1,174 @@
-import search_utils
-from copy import deepcopy
+#Matt Nemeth AI HW Task 1
+
+import sys
+from re    import search
+from copy  import deepcopy
 from queue import PriorityQueue
-from state import State
 
+class State:
+    def __init__(self, id, pid, cbrd, gn, hn):
+        self.id =   id
+        self.pid =  pid
+        self.cbrd = cbrd
+        self.gn =   gn
+        self.hn =   hn
+        self.fn =   gn + hn
 
-def add_open_list_to_expanded(open_list: PriorityQueue, expanded_boards: list):
-    """Add all boards in open list to another list"""
-    for i in range(len(open_list.queue)):
-        if open_list.queue[i][2][0].cbrd not in expanded_boards:
-            expanded_boards.append(open_list.queue[i][2][0].cbrd)
+    def __lt__(self, other):
+        return self.id < other.id
 
+def parse_input() -> list:
+    start_state_brd = search(r"\[([0-9,]+)]", sys.argv[1]).group(1).split(',')
+    goalState = search(r"\[([0-9,]+)]", sys.argv[2]).group(1).split(',')
+    return [start_state_brd, goalState, len(goalState)]
 
-def print_state_detailed_output(closed_list: list, index: int):
-    """Print state details"""
+def swap_positions(list: list, empty_block: int, offset: int):
+    pos2 = empty_block + offset
+    list[empty_block], list[pos2] = list[pos2], list[empty_block]
+
+def expand_all(currState: State, goalState: list, board_length: int, expanded_boards: list) -> list:
+    # Initialize empty block and possible board movements
+    empty_block = currState.cbrd.index('0')
+    left_board =  currState.cbrd.copy()
+    right_board = currState.cbrd.copy()
+    up_board =    currState.cbrd.copy()
+    down_board =  currState.cbrd.copy()
+
+    # Initialize current level and ID for specific state for level
+    currLvl = get_level(currState) + 1
+    id = 0
+
+    # Initialize empty list of all expansion possibilities
+    expansions = []
+
+    # Move left
+    if empty_block % 3 != 0:
+        swap_positions(left_board, empty_block, -1)
+
+        if left_board not in expanded_boards:
+            lh = get_heuristic(left_board, goalState, board_length)
+            left_state = State(str(currLvl) + '_' + str(id), currState.id, left_board, 0, lh)
+            expansions.append((left_state, "Left"))
+            id += 1
+
+    # Move up
+    if empty_block > 2:
+        swap_positions(up_board, empty_block, -3)
+
+        if up_board not in expanded_boards:
+            uh = get_heuristic(up_board, goalState, board_length)
+            up_state = State(str(currLvl) + '_' + str(id), currState.id, up_board, 0, uh)
+            expansions.append((up_state, "Up"))
+            id += 1
+
+    # Move right
+    if empty_block % 3 != 2:
+        swap_positions(right_board, empty_block, 1)
+
+        if right_board not in expanded_boards:
+            rh = get_heuristic(right_board, goalState, board_length)
+            right_state = State(str(currLvl) + '_' + str(id), currState.id, right_board, 0, rh)
+            expansions.append((right_state, "Right"))
+            id += 1
+
+    # Move down
+    if empty_block < board_length - 3:
+        swap_positions(down_board, empty_block, 3)
+
+        if down_board not in expanded_boards:
+            dh = get_heuristic(down_board, goalState, board_length)
+            down_state = State(str(currLvl) + '_' + str(id), currState.id, down_board, 0, dh)
+            expansions.append((down_state, "Down"))
+    return expansions
+
+def get_heuristic(targetState: list, goalState: list, board_length: int) -> int:
+    count = 0
+    for i in range(board_length):
+        if targetState[i] != goalState[i]:
+            count += 1
+    return count
+
+def get_level(currState: State) -> int: #returns current level
+    return int(currState.id.split('_')[0])
+
+def get_id_on_level(currState: State) -> int: #returns id on level
+    return int(currState.id.split('_')[1])
+
+def print_level(closedLst: list, index: int): #print current level
+    currLvl = get_level(closedLst[index][0])
+    prevLvl = get_level(closedLst[index - 1][0])
+    if index == 0 or currLvl - prevLvl != 0:
+        print("Level: " + str(currLvl)+"\n")
+
+def add_openLst_to_expanded(openLst: PriorityQueue, expandedBrds: list):
+    for i in range(len(openLst.queue)):
+        if openLst.queue[i][2][0].cbrd not in expandedBrds:
+            expandedBrds.append(openLst.queue[i][2][0].cbrd)
+
+def print_state_detailed_output(closedLst: list, index: int):
     if index == 0:
-        print("\t\tRoot")
-    elif index > 0 and closed_list[index][0].pid != closed_list[index - 1][0].pid:
-        print("\t\tParent State ID: " + closed_list[index][0].pid)
+        print("Root")
+    elif index > 0 and closedLst[index][0].pid != closedLst[index - 1][0].pid:
+        print("Parent ID: " + closedLst[index][0].pid)
 
-    print("\t\t\tState ID: " + closed_list[index][0].id)
-    print("\t\t\tBoard Config and Relative Movement to Parent: " + "[" +
-          ', '.join(closed_list[index][0].cbrd) + "] - " + closed_list[index][1] + "\n")
+    print("State ID: " + closedLst[index][0].id)
+    print("Board State: " + "[" + ', '.join(closedLst[index][0].cbrd) + "], Movement: " + closedLst[index][1] + "\n")
 
+def bfs(openLst: PriorityQueue, closedLst: list, expand_state: State, goalState: list, brdLen: int, expandedBrds: list) -> bool:
+    level = get_level(expand_state)
 
-def bfs(open_list: PriorityQueue, closed_list: list, expand_state: State, goal_state_brd: list, board_length: int,
-        expanded_boards: list) -> bool:
-    """BFS search. Return True if goal was found and False on timeout"""
-    # Retrieve current level. Return false 36+ levels are explored
-    level = search_utils.get_level(expand_state)
-
-    if level > 35:
+    if level > 30:
         return False
 
-    # Get expanded children state
-    expansions = search_utils.expand_all(expand_state, goal_state_brd, board_length, expanded_boards)
+    expansions = expand_all(expand_state, goalState, brdLen, expandedBrds)
 
-    # Add expansions to open list
     for i in range(len(expansions)):
-        open_list.put((level, search_utils.get_id_on_level(expansions[i][0]),
-                       deepcopy(expansions[i])))
+        openLst.put((level, get_id_on_level(expansions[i][0]), deepcopy(expansions[i])))
 
-    # Add boards of open list to expanded boards
-    add_open_list_to_expanded(open_list, expanded_boards)
+    add_openLst_to_expanded(openLst, expandedBrds)
 
-    # Check if state boards equal goal board and add analyzed states to closed list
-    for i in range(len(open_list.queue)):
-        closed_list.append(open_list.get()[2])
-        if closed_list[-1][0].cbrd == goal_state_brd:
+    for i in range(len(openLst.queue)):
+        closedLst.append(openLst.get()[2])
+        if closedLst[-1][0].cbrd == goalState:
             return True
 
-    # Left-most parent of next state should be expanded
-    next_expansion_index = [cl[0].cbrd for cl in closed_list].index(expand_state.cbrd) + 1
-    expand_state = closed_list[next_expansion_index][0]
+    next_expansion_index = [cl[0].cbrd for cl in closedLst].index(expand_state.cbrd) + 1
+    expand_state = closedLst[next_expansion_index][0]
 
-    return bfs(open_list, closed_list, expand_state, goal_state_brd, board_length, expanded_boards)
+    return bfs(openLst, closedLst, expand_state, goalState, brdLen, expandedBrds)
 
 
 if __name__ == "__main__":
-    # Retrieve boards and length
-    input_lists = search_utils.parse_input()
-    start_state_brd, goal_state_brd, board_length = input_lists[0], input_lists[1], input_lists[2]
+    inList = parse_input()
+    #inList = search_utils.parse_input()
+    goalState =       inList[1]
+    start_state_brd = inList[0]
+    brdLen =          inList[2]
 
-    # Initialize empty closed list and list which will keep track of all boards that go in open list
-    closed_list = []
-    expanded_boards = []
-
-    # Make sure the start state isn't already the goal state
-    if start_state_brd != goal_state_brd:
-        # Initialize start state. State ID is formatted as {level}_{level ID value}.
-        # Initialize open list and boolean for if goal state is found
+    #initialize empty lists for closed and expanded game boards
+    closedLst =    []
+    expandedBrds = []
+    
+    #check if start state is equal to goal state
+    if start_state_brd != goalState:
         expand_state = State('0_0', None, start_state_brd, 0, 0)
-        open_list = PriorityQueue()
 
-        # Put start state on open list
-        open_list.put((search_utils.get_level(expand_state), search_utils.get_id_on_level(expand_state),
-                       deepcopy((expand_state, "Start"))))
+        #create our priority queue
+        openLst = PriorityQueue()
+        openLst.put((get_level(expand_state), get_id_on_level(expand_state), deepcopy((expand_state, "Start"))))
 
-        # Run BFS and print results
-        if bfs(open_list, closed_list, expand_state, goal_state_brd, board_length, expanded_boards):
-            print("Goal state found!\n")
+        if bfs(openLst, closedLst, expand_state, goalState, brdLen, expandedBrds):
+            print("Found the goal state.\n")
         else:
-            print("No solution found! Quit after 36 levels.\n")
+            print("After 30 levels, no solution was found. Ending search...\n")
 
         print("Path-")
-        for i in range(len(closed_list)):
-            search_utils.print_level(closed_list, i)
-            print_state_detailed_output(closed_list, i)
+        for i in range(len(closedLst)):
+            print_level(closedLst, i)
+            print_state_detailed_output(closedLst, i)
 
-        print("\nNumber of nodes added to each list-" + " Open list: " + str(len(expanded_boards)) + ", Closed list: " +
-              str(len(closed_list)))
+        print("\nTotal number of nodes\n" + "Open list: " + str(len(expandedBrds)) + "\nClosed list: " + str(len(closedLst)))
     else:
-        print("Start state and Goal state inputs are equivalent!")
+        print("Start state = Goal state. No moves made.")
+
+
