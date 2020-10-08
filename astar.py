@@ -26,7 +26,7 @@ def swap_positions(list: list, empty_block: int, offset: int):
     pos2 = empty_block + offset
     list[empty_block], list[pos2] = list[pos2], list[empty_block]
 
-def expand_all(currState: State, goalState: list, board_length: int, expanded_boards: list) -> list:
+def expand_all(currState: State, goalState: list, board_length: int, expanded_boards: list, isAstar: bool, h_type: int = 1) -> list:
     # Initialize empty block and possible board movements
     empty_block = currState.cbrd.index('0')
     left_board =  currState.cbrd.copy()
@@ -37,6 +37,8 @@ def expand_all(currState: State, goalState: list, board_length: int, expanded_bo
     # Initialize current level and ID for specific state for level
     currLvl = get_level(currState) + 1
     id = 0
+    hn = 0
+    gn = 0
 
     # Initialize empty list of all expansion possibilities
     expansions = []
@@ -80,6 +82,12 @@ def expand_all(currState: State, goalState: list, board_length: int, expanded_bo
             down_state = State(str(currLvl) + '_' + str(id), currState.id, down_board, 0, dh)
             expansions.append((down_state, "Down"))
     return expansions
+
+def getHN(targetState: list, goalState: list, board_length: int, h_type: int) -> int:
+    heuristic = 0
+
+    for i in range(board_length):
+         
 
 def get_heuristic(targetState: list, goalState: list, board_length: int) -> int:
     count = 0
